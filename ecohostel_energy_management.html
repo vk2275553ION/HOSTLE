@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoHostel - Smart Room Energy & Conservation Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for energy analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857',
+              900: '#064e3b',
+            },
+            energy: {
+              amber: '#f59e0b',
+              red: '#ef4444',
+              blue: '#3b82f6',
+              cyan: '#06b6d4',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars and pulse effects */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.4); border-radius: 9999px; }
+    .glass-card {
+      backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, 0.85);
+      border: 1px solid rgba(229, 231, 235, 0.8);
+    }
+    .dark .glass-card {
+      background: rgba(17, 24, 39, 0.8);
+      border: 1px solid rgba(55, 65, 81, 0.7);
+    }
+    .radar-pulse {
+      box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+      animation: radarPulse 2s infinite;
+    }
+    @keyframes radarPulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .warning-blink {
+      animation: blinkRed 1s infinite alternate;
+    }
+    @keyframes blinkRed {
+      from { opacity: 1; }
+      to { opacity: 0.35; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-300 font-sans">
+  <!-- Toast Notification Box -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 lg:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+        <i data-lucide="zap" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">EcoHostel IoT</h1>
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700">Room 304 Active</span>
+        </div>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Boys Hostel Block B &bull; Resident Energy Monitor & Saver</p>
+      </div>
+    </div>
+
+    <!-- Quick Controls & Theme Toggle -->
+    <div class="flex items-center gap-3">
+      <!-- Room Selector -->
+      <div class="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 text-xs border border-slate-200 dark:border-slate-700">
+        <button class="px-2.5 py-1 rounded bg-white dark:bg-slate-700 shadow-sm font-semibold text-slate-800 dark:text-white">Rm 304</button>
+        <button class="px-2.5 py-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white" onclick="showToast('Room 305 monitor is synced under Block B', 'info')">Rm 305</button>
+        <button class="px-2.5 py-1 rounded text-slate-500 hover:text-slate-900 dark:hover:text-white" onclick="showToast('Room 306 monitor is synced under Block B', 'info')">Rm 306</button>
+      </div>
+
+      <!-- Quick Reset Strikes button -->
+      <button onclick="resetDayCycle()" title="Reset daily points and strikes cycle" class="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-slate-500"></i>
+        <span class="hidden md:inline">Reset Day Cycle</span>
+      </button>
+
+      <!-- Theme Switcher -->
+      <button id="themeToggleBtn" onclick="toggleTheme()" class="p-2 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+        <i data-lucide="moon" id="themeIcon" class="w-4 h-4 text-slate-600 dark:text-amber-400"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Grid Content -->
+  <main class="max-w-7xl mx-auto p-4 lg:p-6 space-y-6">
+
+    <!-- Top KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- Live Wattage -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Live Power Draw</span>
+          <span id="livePulseIndicator" class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+        </div>
+        <div class="mt-3 flex items-baseline gap-2">
+          <span id="currentWattsVal" class="text-3xl font-extrabold font-mono tracking-tight text-slate-900 dark:text-white">185</span>
+          <span class="text-sm font-semibold text-slate-500">Watts</span>
+        </div>
+        <div class="mt-2 text-xs flex items-center justify-between text-slate-500">
+          <span>Relay: <strong id="relayStatusText" class="text-emerald-600 font-bold">ONLINE</strong></span>
+          <span id="wattDiffBadge" class="text-emerald-500 font-medium">-18% vs avg</span>
+        </div>
+      </div>
+
+      <!-- Today's kWh Usage & Target Gauge -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Today's Consumption</span>
+          <i data-lucide="activity" class="w-4 h-4 text-sky-500"></i>
+        </div>
+        <div class="mt-3 flex items-baseline gap-2">
+          <span id="dailyKwhVal" class="text-3xl font-extrabold font-mono text-slate-900 dark:text-white">3.42</span>
+          <span class="text-sm font-semibold text-slate-500">/ 5.00 kWh</span>
+        </div>
+        <!-- Progress Bar -->
+        <div class="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full mt-3 overflow-hidden">
+          <div id="kwhProgressBar" class="bg-gradient-to-r from-emerald-500 to-sky-500 h-full rounded-full transition-all duration-500" style="width: 68%;"></div>
+        </div>
+        <div class="flex justify-between items-center text-[11px] text-slate-400 mt-1">
+          <span>Target: 5.0 kWh/day</span>
+          <span id="kwhPercentText" class="font-semibold text-slate-600 dark:text-slate-300">68% used</span>
+        </div>
+      </div>
+
+      <!-- 100 Points Daily Allowance -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm hover:shadow-md transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider">Green Score (Day Pool)</span>
+          <i data-lucide="award" class="w-4 h-4 text-amber-500"></i>
+        </div>
+        <div class="mt-3 flex items-baseline gap-2">
+          <span id="dailyPointsVal" class="text-3xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400">90</span>
+          <span class="text-sm font-semibold text-slate-500">/ 100 Pts</span>
+        </div>
+        <div class="mt-2 text-xs text-slate-500 flex items-center justify-between">
+          <span>Tier: <span id="rewardTierBadge" class="font-bold text-emerald-600">Eco-Champion (A+)</span></span>
+          <span class="text-xs text-amber-600 dark:text-amber-400" id="deductionsText">-10 pts penalty</span>
+        </div>
+      </div>
+
+      <!-- 3-Strike Room Violation Monitor -->
+      <div class="glass-card rounded-2xl p-4 shadow-sm hover:shadow-md transition border-l-4 border-l-amber-500">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold uppercase text-slate-500 dark:text-slate-400 tracking-wider">3-Strike Violation Meter</span>
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-500"></i>
+        </div>
+        <div class="mt-3 flex items-center gap-3">
+          <!-- 3 Indicator Dots -->
+          <div class="flex items-center gap-2">
+            <div id="strikeDot1" class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white bg-amber-500 shadow">1</div>
+            <div id="strikeDot2" class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-700">2</div>
+            <div id="strikeDot3" class="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-700">3</div>
+          </div>
+          <span id="strikeStatusLabel" class="text-sm font-bold text-amber-600 dark:text-amber-400">1 / 3 Warnings</span>
+        </div>
+        <div class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+          <span id="strikeAdvice">Leaving room with active loads triggers strikes & point loss.</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Main Interactive Grid: Motion Sensor Simulator & Power Cutoff + Analytics Chart -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Column 1: Motion Sensor Simulator & Smart Cutoff Control (5 Cols) -->
+      <div class="lg:col-span-5 space-y-6">
+        
+        <!-- Motion Sensor & Cutoff Controller Card -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm space-y-5">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div class="flex items-center gap-2.5">
+              <div id="motionSensorIcon" class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center radar-pulse">
+                <i data-lucide="radar" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <h2 class="text-sm font-bold text-slate-900 dark:text-white">PIR Motion & Occupancy Sensor</h2>
+                <p class="text-xs text-slate-500">Hardware Simulation &bull; Pins: GPIO-14</p>
+              </div>
+            </div>
+            <!-- Occupancy Badge -->
+            <span id="occupancyBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+              Occupied (Students In)
+            </span>
+          </div>
+
+          <!-- Motion Simulation Controls -->
+          <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl space-y-3 border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Room Status:</span>
+              <div class="flex items-center gap-2">
+                <button id="btnMotionIn" onclick="setOccupancy(true)" class="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 shadow-sm transition">
+                  <i data-lucide="user-check" class="w-3.5 h-3.5 inline mr-1"></i> Motion Detected
+                </button>
+                <button id="btnMotionOut" onclick="setOccupancy(false)" class="text-xs px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-medium hover:bg-red-500 hover:text-white transition">
+                  <i data-lucide="user-x" class="w-3.5 h-3.5 inline mr-1"></i> All Vacated (Out)
+                </button>
+              </div>
+            </div>
+
+            <!-- Auto Cutoff Countdown -->
+            <div class="pt-2">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-slate-500 dark:text-slate-400">Auto Cutoff Timer:</span>
+                <span id="cutoffCountdownText" class="font-mono font-bold text-slate-700 dark:text-slate-300">Standby (Motion Detected)</span>
+              </div>
+              <div class="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div id="cutoffTimerBar" class="bg-amber-500 h-full w-0 transition-all duration-300"></div>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">If all students exit with lights ON, timer ticks down. Reaching 0 triggers a <strong>Violation Strike</strong> & automatic circuit trip.</p>
+            </div>
+          </div>
+
+          <!-- Relay Switchboard Matrix -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Room Relays & Power Cutoff</span>
+              <button onclick="toggleMasterSwitch()" id="btnMasterPower" class="text-xs font-semibold px-2.5 py-1 rounded bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 hover:opacity-90 transition">
+                Manual Override
+              </button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <!-- Relay 1: Overhead Ceiling Fan -->
+              <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="fan" id="fanIcon" class="w-4 h-4 text-emerald-500 animate-spin" style="animation-duration: 2s;"></i>
+                  <div>
+                    <p class="font-semibold text-slate-800 dark:text-slate-200">Ceiling Fan</p>
+                    <p class="text-[10px] text-slate-400">75 Watts</p>
+                  </div>
+                </div>
+                <input type="checkbox" id="relayFanCheck" checked onchange="handleApplianceToggle('fan')" class="w-4 h-4 text-emerald-600 rounded cursor-pointer accent-emerald-500">
+              </div>
+
+              <!-- Relay 2: Tubelights / Desk LEDs -->
+              <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="lightbulb" id="lightIcon" class="w-4 h-4 text-amber-500"></i>
+                  <div>
+                    <p class="font-semibold text-slate-800 dark:text-slate-200">LED Lights</p>
+                    <p class="text-[10px] text-slate-400">40 Watts</p>
+                  </div>
+                </div>
+                <input type="checkbox" id="relayLightCheck" checked onchange="handleApplianceToggle('lights')" class="w-4 h-4 text-emerald-600 rounded cursor-pointer accent-emerald-500">
+              </div>
+
+              <!-- Relay 3: Study Table Laptop Plug -->
+              <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="laptop" id="plugIcon" class="w-4 h-4 text-sky-500"></i>
+                  <div>
+                    <p class="font-semibold text-slate-800 dark:text-slate-200">Desk Outlets</p>
+                    <p class="text-[10px] text-slate-400">70 Watts</p>
+                  </div>
+                </div>
+                <input type="checkbox" id="relayPlugCheck" checked onchange="handleApplianceToggle('plugs')" class="w-4 h-4 text-emerald-600 rounded cursor-pointer accent-emerald-500">
+              </div>
+
+              <!-- Relay 4: Essential Standby / Emergency Alarm -->
+              <div class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="shield" class="w-4 h-4 text-indigo-500"></i>
+                  <div>
+                    <p class="font-semibold text-slate-800 dark:text-slate-200">Safety Socket</p>
+                    <p class="text-[10px] text-slate-400">Always-ON (5W)</p>
+                  </div>
+                </div>
+                <span class="text-[10px] font-bold text-slate-400 uppercase">Protected</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Strike Trigger Simulator Button -->
+          <div class="pt-1 flex gap-2">
+            <button onclick="simulateMistakeEvent()" class="w-full py-2.5 px-3 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 text-xs font-bold transition flex items-center justify-center gap-2">
+              <i data-lucide="bell-ring" class="w-4 h-4"></i>
+              Simulate: Left Room with Power ON (Trigger Mistake)
+            </button>
+          </div>
+        </div>
+
+        <!-- Incident Logs & Violation History -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+              <i data-lucide="history" class="w-4 h-4 text-slate-500"></i>
+              Today's Energy Violations & Relays Log
+            </h3>
+            <span class="text-[11px] text-slate-400">Real-time Timestamp</span>
+          </div>
+          <div id="incidentLogList" class="space-y-2 max-h-48 overflow-y-auto pr-1 text-xs">
+            <!-- Dynamic logs will appear here -->
+            <div class="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-start justify-between">
+              <div>
+                <span class="font-semibold text-amber-600 dark:text-amber-400">[Strike #1] Unattended Fan & Lights</span>
+                <p class="text-[11px] text-slate-500">PIR reported 0 occupancy for 10m. Cutoff engaged.</p>
+              </div>
+              <span class="text-[10px] font-mono text-slate-400">09:15 AM</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Column 2: Consumption Visualizer & Historical Graphs (7 Cols) -->
+      <div class="lg:col-span-7 space-y-6">
+        
+        <!-- Energy Consumption Graph Card -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i data-lucide="bar-chart-3" class="w-5 h-5 text-emerald-500"></i>
+                Watt & kWh Consumption Visualizer
+              </h3>
+              <p class="text-xs text-slate-500">Hourly draw compared with normal hostel baseline pattern</p>
+            </div>
+
+            <!-- Day / Week Toggle & Export -->
+            <div class="flex items-center gap-2 self-start sm:self-auto">
+              <div class="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-1 text-xs border border-slate-200 dark:border-slate-700">
+                <button id="viewBtnDay" onclick="switchGraphView('day')" class="px-3 py-1 font-semibold rounded-md bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm transition">Today (Hourly)</button>
+                <button id="viewBtnWeek" onclick="switchGraphView('week')" class="px-3 py-1 font-medium rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-white transition">7-Day History</button>
+              </div>
+              <button onclick="downloadEnergyReport()" class="p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs flex items-center gap-1" title="Export CSV Summary">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Chart Canvas Container -->
+          <div class="relative w-full h-72">
+            <canvas id="energyChart"></canvas>
+          </div>
+
+          <!-- Behavioral Impact Metric & Insights -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
+            <div class="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/40">
+              <span class="text-emerald-600 dark:text-emerald-400 font-semibold block">Energy Saved:</span>
+              <span class="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-300">1.58 kWh</span>
+              <p class="text-[11px] text-emerald-600/80 mt-0.5">~31.6% lower than baseline</p>
+            </div>
+
+            <div class="p-3 bg-sky-50 dark:bg-sky-950/30 rounded-xl border border-sky-200 dark:border-sky-800/40">
+              <span class="text-sky-600 dark:text-sky-400 font-semibold block">Estimated Cost:</span>
+              <span class="text-lg font-bold font-mono text-sky-700 dark:text-sky-300">₹27.36</span>
+              <p class="text-[11px] text-sky-600/80 mt-0.5">Bill impact (₹8 / unit rate)</p>
+            </div>
+
+            <div class="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800/40">
+              <span class="text-amber-600 dark:text-amber-400 font-semibold block">Behavioral Shift:</span>
+              <span class="text-lg font-bold font-mono text-amber-700 dark:text-amber-300">+24%</span>
+              <p class="text-[11px] text-amber-600/80 mt-0.5">Sensors avoided 4.2 wasted hrs</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Student Resident Mobile App View Preview -->
+        <div class="glass-card rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <i data-lucide="smartphone" class="w-4 h-4 text-emerald-500"></i>
+                Resident Mobile App Synchronizer (Student Smartphone View)
+              </h3>
+              <p class="text-xs text-slate-500">Simulates push notifications & live mobile alerts received by students</p>
+            </div>
+            <span class="text-xs font-mono bg-emerald-100 dark:bg-emerald-950 text-emerald-600 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-800">
+              Sync Active (MQTT/WebSocket)
+            </span>
+          </div>
+
+          <!-- Mobile Frame Mockup Container -->
+          <div class="flex flex-col md:flex-row items-center gap-6 bg-slate-900 rounded-2xl p-4 text-white">
+            
+            <!-- Phone Graphic -->
+            <div class="w-full sm:w-64 bg-slate-950 border-4 border-slate-800 rounded-3xl p-3 shadow-2xl relative">
+              <!-- Phone Notch -->
+              <div class="w-20 h-3.5 bg-slate-800 rounded-b-xl mx-auto mb-2 flex items-center justify-center">
+                <div class="w-2 h-2 rounded-full bg-slate-700"></div>
+              </div>
+
+              <!-- Phone Content -->
+              <div class="space-y-3 text-xs">
+                <div class="flex justify-between items-center text-[10px] text-slate-400">
+                  <span>EcoHostel Student App</span>
+                  <span>100% 🔋</span>
+                </div>
+
+                <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 text-center">
+                  <p class="text-[10px] text-slate-400">Room 304 - Daily Green Pool</p>
+                  <p id="mobilePointsDisplay" class="text-2xl font-black text-emerald-400 font-mono mt-0.5">90 Pts</p>
+                  <p id="mobileStrikeBadge" class="text-[10px] text-amber-400 mt-1">⚠️ 1 of 3 Violations Triggered</p>
+                </div>
+
+                <!-- Live Mobile Push Alert -->
+                <div id="mobilePushBox" class="bg-slate-800/90 border border-amber-500/40 p-2 rounded-xl transition duration-300">
+                  <div class="flex items-center gap-1.5 text-amber-300 font-bold text-[11px]">
+                    <i data-lucide="bell" class="w-3 h-3 text-amber-400"></i>
+                    <span>Push Notification</span>
+                  </div>
+                  <p id="mobilePushMessage" class="text-[10px] text-slate-300 mt-1 leading-tight">
+                    "Alert: Room 304 motion inactive for 10m. Cutoff engaged to save 115W."
+                  </p>
+                </div>
+
+                <!-- Resident Mobile Remote Power Button -->
+                <button onclick="toggleMasterSwitch()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 shadow">
+                  <i data-lucide="power" class="w-3.5 h-3.5"></i> Remote Room Override
+                </button>
+              </div>
+
+              <!-- Phone Home Indicator -->
+              <div class="w-16 h-1 bg-slate-700 rounded-full mx-auto mt-4"></div>
+            </div>
+
+            <!-- Sync Explainer & Student Guidelines -->
+            <div class="flex-1 space-y-2 text-xs">
+              <h4 class="font-bold text-emerald-400 text-sm">Hostel Energy Protocol Rules:</h4>
+              <ul class="space-y-1.5 text-slate-300">
+                <li class="flex items-start gap-1.5">
+                  <span class="text-emerald-400 font-bold">&bull;</span>
+                  <span><strong>100 Points per Day:</strong> Each room receives a fresh quota of 100 green conservation points every morning.</span>
+                </li>
+                <li class="flex items-start gap-1.5">
+                  <span class="text-amber-400 font-bold">&bull;</span>
+                  <span><strong>3-Strike Threshold:</strong> If all room occupants depart with fans or lights left running, the system cuts power after 5-10 minutes and logs a strike. Strike 3 notifies the hostel warden.</span>
+                </li>
+                <li class="flex items-start gap-1.5">
+                  <span class="text-sky-400 font-bold">&bull;</span>
+                  <span><strong>Warden Semester Rewards:</strong> Rooms maintaining 90+ points qualify for term electricity rebates & dining vouchers.</span>
+                </li>
+              </ul>
+              <div class="pt-2">
+                <button onclick="sendAppPushTest()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5">
+                  <i data-lucide="send" class="w-3.5 h-3.5 text-emerald-400"></i> Send Push Ping to Resident Mobile
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Section: Maintenance & Metal/Asset Inventory Inspection -->
+    <div class="glass-card rounded-2xl p-5 shadow-sm space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="wrench" class="w-5 h-5 text-indigo-500"></i>
+            Maintenance & Room Asset / Metal Inventory Inspection
+          </h3>
+          <p class="text-xs text-slate-500">Inspect electrical conduits, metal bed groundings, fan fixtures & submit tickets with photo attachments / inspection sheet</p>
+        </div>
+        <button onclick="openNewTicketModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+          <i data-lucide="plus-circle" class="w-4 h-4"></i> New Inspection / Ticket
+        </button>
+      </div>
+
+      <!-- Assets & Metal Inspection Status Table -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        
+        <!-- Metal Bed Frame Grounding -->
+        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Metal Bed Frames (x2)</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Inspected</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Ground wire safe &bull; No leakage to bed structure</p>
+          <div class="mt-2 text-[10px] text-slate-400">Tag: #MET-BED-304</div>
+        </div>
+
+        <!-- Ceiling Fan Regulator & Bearing -->
+        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Crompton Fan (Metal Blades)</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">Service Due</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Slight bearing hum on speed 5</p>
+          <div class="mt-2 text-[10px] text-slate-400">Tag: #FAN-MET-304</div>
+        </div>
+
+        <!-- Metal Conduit & Main Switchboard -->
+        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Switchboard Faceplate</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Inspected</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Screws fastened &bull; Earth connection 0.2Ω</p>
+          <div class="mt-2 text-[10px] text-slate-400">Tag: #SW-MET-09</div>
+        </div>
+
+        <!-- Window Metal Mesh / Security Grill -->
+        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Safety Iron Grill & AC Vent</span>
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">Optimal</span>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1">Proper airflow clearance</p>
+          <div class="mt-2 text-[10px] text-slate-400">Tag: #GRILL-WND-304</div>
+        </div>
+
+      </div>
+
+      <!-- Maintenance Tickets Log with Photo Attachment Support -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Active Maintenance Tickets & Inspection Forms</span>
+          <span class="text-xs text-slate-400">Forms with image/document attachment</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs text-left">
+            <thead class="text-[11px] text-slate-400 uppercase bg-slate-100/70 dark:bg-slate-800/50">
+              <tr>
+                <th class="py-2.5 px-3 rounded-l-lg">Ticket ID</th>
+                <th class="py-2.5 px-3">Asset Item</th>
+                <th class="py-2.5 px-3">Issue Description</th>
+                <th class="py-2.5 px-3">Attachment / Photo</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 rounded-r-lg text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="maintenanceTableBody" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <!-- Dynamically populated or preloaded rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal: New Maintenance Ticket Form with File Attachment Preview -->
+  <div id="maintenanceModal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <i data-lucide="clipboard-check" class="w-5 h-5 text-indigo-500"></i>
+          Log Maintenance / Metal Asset Inspection
+        </h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="maintenanceForm" onsubmit="submitMaintenanceTicket(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Asset Category</label>
+          <select id="assetCategoryInput" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="Metal Bed Frame (#MET-BED)">Metal Bed Frame Grounding / Structural</option>
+            <option value="Ceiling Fan Fixture (#FAN-MET)">Ceiling Fan Motor & Metal Blades</option>
+            <option value="Conduit Switchboard (#SW-MET)">Conduit Box / Switchboard Faceplate</option>
+            <option value="Appliance Socket (#SOCK-PWR)">Wall Power Sockets & Wiring</option>
+            <option value="Window Security Grill (#GRILL-WND)">Metal Window Grill / AC Bracket</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Inspection Note / Issue Details</label>
+          <textarea id="issueNoteInput" rows="3" required placeholder="Describe any loose metal wiring, spark marks, or energy efficiency issues..." class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1">Photo Attachment / Inspection Sheet</label>
+          <div class="flex items-center gap-3">
+            <input type="file" id="ticketFileInput" accept="image/*,.pdf" onchange="handleFileUpload(event)" class="text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 dark:file:bg-indigo-950 dark:file:text-indigo-300 hover:file:bg-indigo-100">
+          </div>
+          <!-- Preview container -->
+          <div id="imagePreviewContainer" class="mt-2 hidden">
+            <p class="text-[10px] text-slate-400 mb-1">Uploaded Inspection Image Preview:</p>
+            <div class="relative w-32 h-24 rounded-lg overflow-hidden border border-slate-300 dark:border-slate-700 shadow-sm">
+              <img id="imagePreviewTarget" src="" alt="Inspection attachment preview" class="w-full h-full object-cover">
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal()" class="px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+            Cancel
+          </button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm transition">
+            Save & Dispatch Ticket
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    /* State Management */
+    const STATE = {
+      isOccupied: true,
+      masterPower: true,
+      appliances: {
+        fan: true,
+        lights: true,
+        plugs: true,
+      },
+      currentWatts: 185,
+      dailyKwh: 3.42,
+      maxTargetKwh: 5.0,
+      dailyPoints: 90,
+      strikes: 1,
+      cutoffTimerSeconds: 0,
+      cutoffInterval: null,
+      liveWattsInterval: null,
+      currentView: 'day',
+      chartInstance: null,
+      tickets: [
+        {
+          id: 'TCK-8012',
+          asset: 'Ceiling Fan (#FAN-MET-304)',
+          note: 'Bearing rattles at max setting; requires lubrication',
+          image: 'https://images.unsplash.com/photo-1590483736622-39da86788790?w=300&auto=format&fit=crop&q=60',
+          status: 'In-Progress',
+          date: 'Oct 13, 10:30 AM'
+        },
+        {
+          id: 'TCK-7940',
+          asset: 'Metal Bed Frame (#MET-BED-304)',
+          note: 'Routine grounding earthing loop tested (Passed)',
+          image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=300&auto=format&fit=crop&q=60',
+          status: 'Resolved',
+          date: 'Oct 11, 04:15 PM'
+        }
+      ]
+    };
+
+    /* Chart Data: Hourly Watts Consumption vs Baseline Normal Pattern */
+    const HOURLY_LABELS = ['06:00', '08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00', '00:00'];
+    const HOURLY_NORMAL_BASELINE = [120, 240, 210, 190, 220, 200, 260, 290, 250, 110];
+    const HOURLY_ACTUAL_WATTS = [95, 185, 45, 0, 50, 120, 210, 240, 185, 60];
+
+    const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Today'];
+    const WEEK_NORMAL_KWH = [4.8, 5.1, 4.9, 5.2, 5.0, 4.6, 4.8];
+    const WEEK_ACTUAL_KWH = [3.8, 3.2, 3.6, 3.9, 3.1, 3.5, 3.42];
+
+    /* Initialize on DOM Load */
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initChart();
+      renderTicketsTable();
+      startLiveWattsSimulation();
+      updateStrikeUI();
+      updatePointsUI();
+      updateRelayVisuals();
+    });
+
+    /* Theme Toggle */
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      const icon = document.getElementById('themeIcon');
+      if (isDark) {
+        icon.setAttribute('data-lucide', 'sun');
+      } else {
+        icon.setAttribute('data-lucide', 'moon');
+      }
+      lucide.createIcons();
+      updateChartColors();
+    }
+
+    /* Chart Initializer */
+    function initChart() {
+      const ctx = document.getElementById('energyChart').getContext('2d');
+      const isDark = document.documentElement.classList.contains('dark');
+
+      STATE.chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: HOURLY_LABELS,
+          datasets: [
+            {
+              label: 'Actual Room 304 Watts',
+              data: HOURLY_ACTUAL_WATTS,
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              borderWidth: 2.5,
+              tension: 0.35,
+              fill: true,
+              pointBackgroundColor: '#10b981',
+              pointRadius: 4,
+            },
+            {
+              label: 'Hostel Normal Baseline (Watts)',
+              data: HOURLY_NORMAL_BASELINE,
+              borderColor: '#94a3b8',
+              borderDash: [5, 5],
+              borderWidth: 1.8,
+              tension: 0.3,
+              fill: false,
+              pointRadius: 0,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                color: isDark ? '#cbd5e1' : '#475569',
+                font: { family: 'Inter', size: 11, weight: '500' }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return ` ${context.dataset.label}: ${context.parsed.y} ${STATE.currentView === 'day' ? 'W' : 'kWh'}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.6)' },
+              ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 10 } }
+            },
+            y: {
+              grid: { color: isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.6)' },
+              ticks: { color: isDark ? '#94a3b8' : '#64748b', font: { size: 10 } },
+              title: {
+                display: true,
+                text: 'Load (Watts)',
+                color: isDark ? '#94a3b8' : '#64748b',
+                font: { size: 11 }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /* Switch Chart between Hourly Day and 7-Day History */
+    function switchGraphView(view) {
+      STATE.currentView = view;
+      const btnDay = document.getElementById('viewBtnDay');
+      const btnWeek = document.getElementById('viewBtnWeek');
+
+      if (view === 'day') {
+        btnDay.className = "px-3 py-1 font-semibold rounded-md bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm transition";
+        btnWeek.className = "px-3 py-1 font-medium rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-white transition";
+        
+        STATE.chartInstance.data.labels = HOURLY_LABELS;
+        STATE.chartInstance.data.datasets[0].label = 'Actual Room 304 Watts';
+        STATE.chartInstance.data.datasets[0].data = HOURLY_ACTUAL_WATTS;
+        STATE.chartInstance.data.datasets[1].label = 'Hostel Normal Baseline (Watts)';
+        STATE.chartInstance.data.datasets[1].data = HOURLY_NORMAL_BASELINE;
+        STATE.chartInstance.options.scales.y.title.text = 'Load (Watts)';
+      } else {
+        btnWeek.className = "px-3 py-1 font-semibold rounded-md bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 shadow-sm transition";
+        btnDay.className = "px-3 py-1 font-medium rounded-md text-slate-500 hover:text-slate-900 dark:hover:text-white transition";
+
+        STATE.chartInstance.data.labels = WEEK_LABELS;
+        STATE.chartInstance.data.datasets[0].label = 'Daily Consumption (kWh)';
+        STATE.chartInstance.data.datasets[0].data = WEEK_ACTUAL_KWH;
+        STATE.chartInstance.data.datasets[1].label = 'Target Baseline (5.0 kWh)';
+        STATE.chartInstance.data.datasets[1].data = WEEK_NORMAL_KWH;
+        STATE.chartInstance.options.scales.y.title.text = 'Daily Units (kWh)';
+      }
+      STATE.chartInstance.update();
+    }
+
+    function updateChartColors() {
+      if (!STATE.chartInstance) return;
+      const isDark = document.documentElement.classList.contains('dark');
+      STATE.chartInstance.options.scales.x.grid.color = isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.6)';
+      STATE.chartInstance.options.scales.y.grid.color = isDark ? 'rgba(51, 65, 85, 0.3)' : 'rgba(226, 232, 240, 0.6)';
+      STATE.chartInstance.options.scales.x.ticks.color = isDark ? '#94a3b8' : '#64748b';
+      STATE.chartInstance.options.scales.y.ticks.color = isDark ? '#94a3b8' : '#64748b';
+      STATE.chartInstance.options.plugins.legend.labels.color = isDark ? '#cbd5e1' : '#475569';
+      STATE.chartInstance.update();
+    }
+
+    /* Motion Sensor & Auto Power Cutoff Logic */
+    function setOccupancy(occupied) {
+      STATE.isOccupied = occupied;
+      const occBadge = document.getElementById('occupancyBadge');
+      const sensorIcon = document.getElementById('motionSensorIcon');
+      const countdownText = document.getElementById('cutoffCountdownText');
+      const timerBar = document.getElementById('cutoffTimerBar');
+
+      if (occupied) {
+        clearInterval(STATE.cutoffInterval);
+        STATE.cutoffTimerSeconds = 0;
+        timerBar.style.width = '0%';
+        countdownText.textContent = "Standby (Motion Detected - Occupied)";
+        countdownText.className = "font-mono font-bold text-slate-700 dark:text-slate-300";
+
+        occBadge.className = "text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700";
+        occBadge.textContent = "Occupied (Students In)";
+        sensorIcon.className = "w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center radar-pulse";
+        
+        showToast("Motion detected in Room 304. Sensors active.", "info");
+      } else {
+        occBadge.className = "text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700";
+        occBadge.textContent = "Vacated (0 Motion Detected)";
+        sensorIcon.className = "w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center";
+
+        // Check if loads are active
+        const hasActiveLoads = STATE.appliances.fan || STATE.appliances.lights || STATE.appliances.plugs;
+        if (hasActiveLoads && STATE.masterPower) {
+          startCutoffCountdown();
+        } else {
+          countdownText.textContent = "All power already switched OFF. Room safe.";
+          timerBar.style.width = '0%';
+        }
+      }
+    }
+
+    function startCutoffCountdown() {
+      clearInterval(STATE.cutoffInterval);
+      let timeLeft = 10; // 10 second interactive demo simulation of 10 min threshold
+      const countdownText = document.getElementById('cutoffCountdownText');
+      const timerBar = document.getElementById('cutoffTimerBar');
+
+      countdownText.className = "font-mono font-bold text-amber-600 dark:text-amber-400 warning-blink";
+
+      STATE.cutoffInterval = setInterval(() => {
+        timeLeft--;
+        const percentage = ((10 - timeLeft) / 10) * 100;
+        timerBar.style.width = `${percentage}%`;
+        countdownText.textContent = `Auto Cutoff in ${timeLeft}s (Power left running!)`;
+
+        if (timeLeft <= 0) {
+          clearInterval(STATE.cutoffInterval);
+          executeAutoCutoff();
+        }
+      }, 1000);
+    }
+
+    /* Auto Cutoff Trigger & Mistake Violation Adder */
+    function executeAutoCutoff() {
+      // Trip power switches
+      STATE.appliances.fan = false;
+      STATE.appliances.lights = false;
+      STATE.appliances.plugs = false;
+      document.getElementById('relayFanCheck').checked = false;
+      document.getElementById('relayLightCheck').checked = false;
+      document.getElementById('relayPlugCheck').checked = false;
+
+      // Register Mistake Strike
+      registerStrike("Room vacated without turning off fan & lights (PIR auto-trip engaged).");
+      updateRelayVisuals();
+      recalculateWatts();
+
+      document.getElementById('cutoffCountdownText').textContent = "AUTO POWER CUTOFF EXECUTED";
+      document.getElementById('cutoffCountdownText').className = "font-mono font-bold text-red-600 dark:text-red-400";
+      
+      showToast("AUTO-CUTOFF: Relays switched OFF. 1 Violation Strike added to Room 304.", "error");
+      pushMobileNotification("Room 304 auto-cutoff engaged! Power was left running. Strike added.");
+    }
+
+    function simulateMistakeEvent() {
+      // Set appliances on & trigger vacancy
+      STATE.appliances.fan = true;
+      STATE.appliances.lights = true;
+      document.getElementById('relayFanCheck').checked = true;
+      document.getElementById('relayLightCheck').checked = true;
+      updateRelayVisuals();
+      setOccupancy(false);
+      showToast("Simulation Started: All students left Room 304 with power ON.", "warning");
+    }
+
+    /* 3-Strike & Points Violation Logic */
+    function registerStrike(reason) {
+      if (STATE.strikes < 3) {
+        STATE.strikes += 1;
+        // Deduct 10 points per strike from the 100-point daily pool
+        STATE.dailyPoints = Math.max(0, STATE.dailyPoints - 10);
+      } else {
+        // Already at max strikes
+        STATE.dailyPoints = Math.max(0, STATE.dailyPoints - 20);
+        showToast("CRITICAL: Room 304 exceeded 3 Strikes! Notification dispatched to Hostel Warden.", "error");
+      }
+
+      updateStrikeUI();
+      updatePointsUI();
+      logIncident(`Strike #${STATE.strikes}: ${reason}`);
+    }
+
+    function updateStrikeUI() {
+      const dot1 = document.getElementById('strikeDot1');
+      const dot2 = document.getElementById('strikeDot2');
+      const dot3 = document.getElementById('strikeDot3');
+      const label = document.getElementById('strikeStatusLabel');
+      const advice = document.getElementById('strikeAdvice');
+      const mobBadge = document.getElementById('mobileStrikeBadge');
+
+      const activeColor = "bg-red-500 text-white shadow-md animate-pulse";
+      const inactiveColor = "bg-slate-200 dark:bg-slate-700 text-slate-400";
+
+      dot1.className = `w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${STATE.strikes >= 1 ? 'bg-amber-500 text-white' : inactiveColor}`;
+      dot2.className = `w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${STATE.strikes >= 2 ? 'bg-amber-600 text-white' : inactiveColor}`;
+      dot3.className = `w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${STATE.strikes >= 3 ? activeColor : inactiveColor}`;
+
+      label.textContent = `${STATE.strikes} / 3 Strikes`;
+
+      if (STATE.strikes === 0) {
+        label.className = "text-sm font-bold text-emerald-600 dark:text-emerald-400";
+        advice.textContent = "Perfect streak! Zero room vacancy violations.";
+        mobBadge.textContent = "✅ Clean Record - No Warnings";
+        mobBadge.className = "text-[10px] text-emerald-400 mt-1";
+      } else if (STATE.strikes === 1) {
+        label.className = "text-sm font-bold text-amber-500";
+        advice.textContent = "1 Warning recorded. Keep lights OFF when leaving!";
+        mobBadge.textContent = "⚠️ 1 of 3 Violations Triggered";
+        mobBadge.className = "text-[10px] text-amber-400 mt-1";
+      } else if (STATE.strikes === 2) {
+        label.className = "text-sm font-bold text-amber-600 dark:text-amber-500";
+        advice.textContent = "Caution! 1 strike remaining before warden escalation.";
+        mobBadge.textContent = "⚠️⚠️ 2 of 3 Violations Triggered";
+        mobBadge.className = "text-[10px] text-orange-400 mt-1";
+      } else {
+        label.className = "text-sm font-bold text-red-600 dark:text-red-400";
+        advice.textContent = "Penalty Active! Warden review logged for Block B.";
+        mobBadge.textContent = "🚨 3/3 Strikes: Warden Alert Sent";
+        mobBadge.className = "text-[10px] text-red-400 mt-1 font-bold";
+      }
+    }
+
+    function updatePointsUI() {
+      const ptsVal = document.getElementById('dailyPointsVal');
+      const tierBadge = document.getElementById('rewardTierBadge');
+      const deductText = document.getElementById('deductionsText');
+      const mobPts = document.getElementById('mobilePointsDisplay');
+
+      ptsVal.textContent = STATE.dailyPoints;
+      mobPts.textContent = `${STATE.dailyPoints} Pts`;
+
+      const lost = 100 - STATE.dailyPoints;
+      deductText.textContent = lost > 0 ? `-${lost} pts penalty` : "0 pts penalty";
+
+      if (STATE.dailyPoints >= 90) {
+        tierBadge.textContent = "Eco-Champion (A+)";
+        tierBadge.className = "font-bold text-emerald-600 dark:text-emerald-400";
+      } else if (STATE.dailyPoints >= 70) {
+        tierBadge.textContent = "Good Conserver (B)";
+        tierBadge.className = "font-bold text-sky-600 dark:text-sky-400";
+      } else {
+        tierBadge.textContent = "High Waste Alert (C)";
+        tierBadge.className = "font-bold text-red-600 dark:text-red-400";
+      }
+    }
+
+    function resetDayCycle() {
+      STATE.strikes = 0;
+      STATE.dailyPoints = 100;
+      updateStrikeUI();
+      updatePointsUI();
+      showToast("Daily cycle refreshed. Room 304 restored to 100 Points and 0 Strikes.", "success");
+      logIncident("Cycle Reset: Restored to 100 Green Points & 0 Strikes.");
+      pushMobileNotification("Morning Reset: 100/100 points restored for today.");
+    }
+
+    /* Relay & Master Power Controls */
+    function toggleMasterSwitch() {
+      STATE.masterPower = !STATE.masterPower;
+      const btn = document.getElementById('btnMasterPower');
+      const statusText = document.getElementById('relayStatusText');
+
+      if (!STATE.masterPower) {
+        // Cut all non-essential
+        STATE.appliances.fan = false;
+        STATE.appliances.lights = false;
+        STATE.appliances.plugs = false;
+        document.getElementById('relayFanCheck').checked = false;
+        document.getElementById('relayLightCheck').checked = false;
+        document.getElementById('relayPlugCheck').checked = false;
+        btn.textContent = "Turn ON Override";
+        statusText.textContent = "CUTOFF";
+        statusText.className = "text-red-500 font-bold";
+        showToast("Room 304: Master circuit trip engaged.", "warning");
+      } else {
+        STATE.appliances.fan = true;
+        STATE.appliances.lights = true;
+        document.getElementById('relayFanCheck').checked = true;
+        document.getElementById('relayLightCheck').checked = true;
+        btn.textContent = "Manual Override";
+        statusText.textContent = "ONLINE";
+        statusText.className = "text-emerald-600 font-bold";
+        showToast("Room 304: Relays power restored.", "success");
+      }
+      updateRelayVisuals();
+      recalculateWatts();
+    }
+
+    function handleApplianceToggle(appliance) {
+      if (appliance === 'fan') STATE.appliances.fan = document.getElementById('relayFanCheck').checked;
+      if (appliance === 'lights') STATE.appliances.lights = document.getElementById('relayLightCheck').checked;
+      if (appliance === 'plugs') STATE.appliances.plugs = document.getElementById('relayPlugCheck').checked;
+
+      updateRelayVisuals();
+      recalculateWatts();
+    }
+
+    function updateRelayVisuals() {
+      const fanIcon = document.getElementById('fanIcon');
+      const lightIcon = document.getElementById('lightIcon');
+      const plugIcon = document.getElementById('plugIcon');
+
+      if (STATE.appliances.fan) {
+        fanIcon.classList.add('animate-spin');
+        fanIcon.classList.remove('text-slate-400');
+        fanIcon.classList.add('text-emerald-500');
+      } else {
+        fanIcon.classList.remove('animate-spin');
+        fanIcon.classList.remove('text-emerald-500');
+        fanIcon.classList.add('text-slate-400');
+      }
+
+      if (STATE.appliances.lights) {
+        lightIcon.classList.remove('text-slate-400');
+        lightIcon.classList.add('text-amber-500');
+      } else {
+        lightIcon.classList.remove('text-amber-500');
+        lightIcon.classList.add('text-slate-400');
+      }
+
+      if (STATE.appliances.plugs) {
+        plugIcon.classList.remove('text-slate-400');
+        plugIcon.classList.add('text-sky-500');
+      } else {
+        plugIcon.classList.remove('text-sky-500');
+        plugIcon.classList.add('text-slate-400');
+      }
+    }
+
+    function recalculateWatts() {
+      let watts = 5; // Standby safety baseline
+      if (STATE.appliances.fan) watts += 75;
+      if (STATE.appliances.lights) watts += 40;
+      if (STATE.appliances.plugs) watts += 65;
+
+      STATE.currentWatts = watts;
+      document.getElementById('currentWattsVal').textContent = STATE.currentWatts;
+
+      const badge = document.getElementById('wattDiffBadge');
+      if (STATE.currentWatts > 150) {
+        badge.textContent = "+12% vs baseline";
+        badge.className = "text-amber-500 font-medium";
+      } else if (STATE.currentWatts < 50) {
+        badge.textContent = "-75% standby safe";
+        badge.className = "text-emerald-500 font-medium";
+      } else {
+        badge.textContent = "-18% vs avg";
+        badge.className = "text-emerald-500 font-medium";
+      }
+    }
+
+    function startLiveWattsSimulation() {
+      setInterval(() => {
+        // Minor natural fluctuations in live load
+        if (STATE.currentWatts > 10) {
+          const jitter = (Math.random() * 6 - 3);
+          const simulated = Math.max(5, Math.round(STATE.currentWatts + jitter));
+          document.getElementById('currentWattsVal').textContent = simulated;
+        }
+      }, 3500);
+    }
+
+    /* Incident Log System */
+    function logIncident(text) {
+      const container = document.getElementById('incidentLogList');
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const item = document.createElement('div');
+      item.className = "p-2.5 rounded-lg bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-start justify-between";
+      item.innerHTML = `
+        <div>
+          <span class="font-semibold text-slate-800 dark:text-slate-200">${text}</span>
+          <p class="text-[11px] text-slate-500">Auto-recorded by EcoHostel System</p>
+        </div>
+        <span class="text-[10px] font-mono text-slate-400 ml-2 whitespace-nowrap">${timeStr}</span>
+      `;
+      container.prepend(item);
+    }
+
+    /* Mobile View & Push Notifications */
+    function pushMobileNotification(msg) {
+      const box = document.getElementById('mobilePushBox');
+      const text = document.getElementById('mobilePushMessage');
+      text.textContent = `"${msg}"`;
+      box.classList.add('bg-amber-900/60', 'scale-[1.02]');
+      setTimeout(() => {
+        box.classList.remove('bg-amber-900/60', 'scale-[1.02]');
+      }, 1000);
+    }
+
+    function sendAppPushTest() {
+      const msg = `Hostel Alert: Room 304 current draw is ${STATE.currentWatts}W. Maintain daily 100 green score!`;
+      pushMobileNotification(msg);
+      showToast("Test notification dispatched to resident smartphone app.", "success");
+    }
+
+    /* Maintenance & Metal Inspection Management */
+    function renderTicketsTable() {
+      const tbody = document.getElementById('maintenanceTableBody');
+      tbody.innerHTML = '';
+
+      STATE.tickets.forEach(ticket => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50 dark:hover:bg-slate-800/40 transition";
+
+        const badgeColor = ticket.status === 'Resolved' 
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' 
+          : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300';
+
+        tr.innerHTML = `
+          <td class="py-3 px-3 font-mono font-semibold text-slate-700 dark:text-slate-300">${ticket.id}</td>
+          <td class="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">${ticket.asset}</td>
+          <td class="py-3 px-3 text-slate-500 max-w-xs truncate">${ticket.note}</td>
+          <td class="py-3 px-3">
+            <button onclick="previewTicketAttachment('${ticket.image}')" class="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline">
+              <i data-lucide="image" class="w-3.5 h-3.5"></i> View Photo
+            </button>
+          </td>
+          <td class="py-3 px-3">
+            <span class="text-[10px] px-2 py-0.5 rounded font-bold ${badgeColor}">${ticket.status}</span>
+          </td>
+          <td class="py-3 px-3 text-right">
+            <button onclick="resolveTicket('${ticket.id}')" class="text-[11px] px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300">
+              ${ticket.status === 'Resolved' ? 'Archive' : 'Mark Fixed'}
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      lucide.createIcons();
+    }
+
+    function openNewTicketModal() {
+      document.getElementById('maintenanceModal').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('maintenanceModal').classList.add('hidden');
+      document.getElementById('maintenanceForm').reset();
+      document.getElementById('imagePreviewContainer').classList.add('hidden');
+    }
+
+    let uploadedImageData = null;
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          uploadedImageData = e.target.result;
+          const previewImg = document.getElementById('imagePreviewTarget');
+          previewImg.src = uploadedImageData;
+          document.getElementById('imagePreviewContainer').classList.remove('hidden');
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function submitMaintenanceTicket(e) {
+      e.preventDefault();
+      const asset = document.getElementById('assetCategoryInput').value;
+      const note = document.getElementById('issueNoteInput').value;
+      const newId = `TCK-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const newTicket = {
+        id: newId,
+        asset: asset,
+        note: note,
+        image: uploadedImageData || 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&auto=format&fit=crop&q=60',
+        status: 'In-Progress',
+        date: 'Today'
+      };
+
+      STATE.tickets.unshift(newTicket);
+      renderTicketsTable();
+      closeModal();
+      showToast(`Ticket ${newId} logged for metal maintenance & inspection team.`, "success");
+      logIncident(`Maintenance ticket created: ${asset}`);
+    }
+
+    function previewTicketAttachment(imgUrl) {
+      const w = window.open("", "_blank");
+      if (w) {
+        w.document.write(`
+          <html>
+            <head><title>Asset Inspection Attachment Preview</title></head>
+            <body style="margin:0; background:#0f172a; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif; color:white;">
+              <h2 style="font-size:18px;">Hostel Asset Maintenance Photo</h2>
+              <img src="${imgUrl}" style="max-width:85%; max-height:75%; border-radius:12px; box-shadow:0 10px 25px rgba(0,0,0,0.5);" onerror="this.src='https://placehold.co/600x400/1e293b/94a3b8?text=Asset+Inspection+Photo'">
+              <p style="margin-top:12px; font-size:12px; color:#94a3b8;">EcoHostel Digital Maintenance Form & Verification</p>
+            </body>
+          </html>
+        `);
+      }
+    }
+
+    function resolveTicket(id) {
+      const ticket = STATE.tickets.find(t => t.id === id);
+      if (ticket) {
+        ticket.status = ticket.status === 'Resolved' ? 'Archived' : 'Resolved';
+        renderTicketsTable();
+        showToast(`Ticket ${id} status updated to ${ticket.status}.`, "info");
+      }
+    }
+
+    /* CSV Export */
+    function downloadEnergyReport() {
+      let csv = "Time_Or_Day,Watts_Or_kWh,Hostel_Baseline_Units\n";
+      HOURLY_LABELS.forEach((l, idx) => {
+        csv += `${l},${HOURLY_ACTUAL_WATTS[idx]},${HOURLY_NORMAL_BASELINE[idx]}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', `EcoHostel_Room304_Report.csv`);
+      a.click();
+      showToast("Downloaded energy audit log report (CSV).", "success");
+    }
+
+    /* Toast Notification Helper */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      
+      let borderCol = 'border-slate-300 dark:border-slate-700';
+      let icon = 'info';
+      if (type === 'error') { borderCol = 'border-red-500 text-red-600 dark:text-red-400'; icon = 'alert-triangle'; }
+      if (type === 'success') { borderCol = 'border-emerald-500 text-emerald-600 dark:text-emerald-400'; icon = 'check-circle'; }
+      if (type === 'warning') { borderCol = 'border-amber-500 text-amber-600 dark:text-amber-400'; icon = 'bell'; }
+
+      toast.className = `pointer-events-auto bg-white dark:bg-slate-900 border ${borderCol} shadow-xl rounded-xl p-3 flex items-center gap-2.5 text-xs font-semibold transform transition-all duration-300 translate-y-2 opacity-0 max-w-sm`;
+      toast.innerHTML = `
+        <i data-lucide="${icon}" class="w-4 h-4 shrink-0"></i>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      lucide.createIcons();
+
+      // Animate in
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      // Animate out
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+  </script>
+</body>
+</html>
